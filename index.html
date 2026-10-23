@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Nafas: clean-air hours for Tashkent</title>
+  <meta name="description" content="When is the air clean enough to go outside? Hour-by-hour plan for kids, people with asthma and everyone, plus one-tap alerts for mahalla and class Telegram chats.">
+  <meta name="theme-color" content="#1D44A8">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&family=Unbounded:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <script type="module" src="app.js"></script>
+</head>
+<body>
+  <a class="skip" href="#main" data-i18n="skip">Skip to content</a>
+
+  <header class="bar">
+    <a class="wordmark" href="./">
+      <svg viewBox="0 0 64 64" aria-hidden="true"><path d="M8 26c8-8 16 8 24 0s16 8 24 0M8 40c8-8 16 8 24 0s16 8 24 0"/></svg>
+      <span>nafas</span>
+    </a>
+    <button type="button" id="place-btn" class="place-btn" aria-expanded="false" aria-controls="place-panel">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7-6.2-7-11.5A7 7 0 0 1 19 9.5C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>
+      <span id="place-label">Tashkent</span>
+      <span class="sr-only" data-i18n="changePlace">Change place</span>
+    </button>
+    <nav class="lang" aria-label="Language / Til / Язык">
+      <button type="button" data-lang="uz">UZ</button>
+      <button type="button" data-lang="ru">RU</button>
+      <button type="button" data-lang="en">EN</button>
+    </nav>
+  </header>
+
+  <div id="place-panel" class="place-panel" hidden>
+    <form id="search-form" role="search">
+      <label for="city" data-i18n="cityLabel">City or district</label>
+      <div class="field">
+        <input id="city" type="search" autocomplete="off" data-i18n-ph="cityPh" placeholder="Tashkent, Samarkand…">
+        <button type="submit" class="btn btn-ink" data-i18n="find">Find</button>
+      </div>
+    </form>
+    <button type="button" id="geo" class="btn-text" data-i18n="useLocation">Use my location</button>
+    <ul id="results" class="results" hidden></ul>
+  </div>
+
+  <main id="main">
+    <section class="sky" id="sky" aria-labelledby="verdict">
+      <div class="sky-inner">
+        <div class="reading">
+          <p class="kicker"><span id="hero-place">Tashkent</span> <span id="hero-time"></span></p>
+          <p class="aqi" aria-describedby="aqi-band"><span id="aqi-num">··</span><span class="aqi-unit">AQI</span></p>
+          <p class="band" id="aqi-band">&nbsp;</p>
+          <p class="pm" id="pm-line">&nbsp;</p>
+        </div>
+
+        <div class="decision">
+          <fieldset class="who">
+            <legend data-i18n="whoLegend">Who is going outside?</legend>
+            <div class="seg">
+              <label><input type="radio" name="who" value="kids"><span data-i18n="p_kids">Kids &amp; school</span></label>
+              <label><input type="radio" name="who" value="sensitive"><span data-i18n="p_sensitive">Asthma, elderly, pregnant</span></label>
+              <label><input type="radio" name="who" value="everyone"><span data-i18n="p_everyone">Everyone &amp; sport</span></label>
+            </div>
+          </fieldset>
+          <h1 id="verdict" class="verdict"><span class="mark" id="verdict-mark" aria-hidden="true"></span><span id="verdict-text">&nbsp;</span></h1>
+          <ul id="reasons" class="reasons"></ul>
+        </div>
+      </div>
+      <p id="status" class="status" role="status" aria-live="polite"></p>
+    </section>
+
+    <section class="block" aria-labelledby="h-next">
+      <div class="block-head">
+        <h2 id="h-next" data-i18n="nextTitle">Next 24 hours</h2>
+        <p id="best" class="best"></p>
+      </div>
+      <div class="hours-scroll">
+        <ol id="hours" class="hours"></ol>
+      </div>
+      <ul class="legend" aria-hidden="true">
+        <li><i class="sw lv0"></i><span data-i18n="lg0">Go</span></li>
+        <li><i class="sw lv1"></i><span data-i18n="lg1">Short</span></li>
+        <li><i class="sw lv2"></i><span data-i18n="lg2">Inside</span></li>
+        <li><i class="sw school"></i><span data-i18n="lgSchool">School hours</span></li>
+      </ul>
+    </section>
+
+    <div class="split">
+      <section class="block" aria-labelledby="h-do">
+        <h2 id="h-do" data-i18n="doTitle">What to do now</h2>
+        <ol id="advice" class="advice"></ol>
+      </section>
+
+      <section class="block" aria-labelledby="h-clock">
+        <h2 id="h-clock" data-i18n="clockTitle">Smog clock</h2>
+        <p class="sub" data-i18n="clockSub">Average air for each hour of the day, last 7 days</p>
+        <figure class="clock">
+          <div id="clock"></div>
+          <figcaption id="clock-insight" class="insight"></figcaption>
+        </figure>
+        <p id="clock-school" class="insight-sub"></p>
+      </section>
+    </div>
+
+    <section class="block share" aria-labelledby="h-share">
+      <h2 id="h-share" data-i18n="shareTitle">Tell your mahalla, class or family</h2>
+      <p class="sub" data-i18n="shareSub">Telegram chats are the fastest way news travels in a mahalla.</p>
+      <div class="share-grid">
+        <div class="preview">
+          <pre id="digest" class="digest" tabindex="0"></pre>
+        </div>
+        <div class="share-actions">
+          <a id="tg-share" class="btn btn-accent" target="_blank" rel="noopener">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21.5 3.5 2.8 10.7c-1 .4-1 1.8 0 2.1l4.6 1.5 1.8 5.6c.3.9 1.4 1.1 2 .4l2.6-2.7 4.7 3.5c.7.5 1.7.1 1.9-.8L23 4.9c.2-1-.7-1.8-1.5-1.4zM9.6 14.6l8.4-7.4-6.6 8.9-.4 3-1.4-4.5z"/></svg>
+            <span data-i18n="tgShare">Send today's plan to Telegram</span>
+          </a>
+          <button type="button" id="copy" class="btn btn-line" data-i18n="copy">Copy text</button>
+          <a id="tg-alert" class="btn btn-line btn-warn" target="_blank" rel="noopener" data-i18n="alertBtn">Smog alert for neighbours</a>
+          <a id="tg-channel" class="btn-text" target="_blank" rel="noopener" hidden data-i18n="channel">Daily 07:00 post in Telegram</a>
+          <p id="copied" class="copied" role="status" aria-live="polite"></p>
+        </div>
+      </div>
+    </section>
+
+    <div class="split split-bottom">
+      <details class="block settings">
+        <summary data-i18n="settings">School hours</summary>
+        <div class="settings-grid">
+          <label><span data-i18n="sStart">Lessons start</span><input type="number" id="s-start" min="5" max="14" step="1" inputmode="numeric"></label>
+          <label><span data-i18n="sEnd">Lessons end</span><input type="number" id="s-end" min="9" max="22" step="1" inputmode="numeric"></label>
+        </div>
+      </details>
+
+      <details class="block method">
+        <summary data-i18n="methodTitle">How Nafas decides</summary>
+        <ol class="method-list">
+          <li data-i18n="m1"></li>
+          <li data-i18n="m2"></li>
+          <li data-i18n="m3"></li>
+          <li data-i18n="m4"></li>
+        </ol>
+      </details>
+    </div>
+  </main>
+
+  <footer class="foot">
+    <p data-i18n="footer"></p>
+  </footer>
+</body>
+</html>

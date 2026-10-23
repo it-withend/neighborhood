@@ -1,0 +1,15 @@
+{
+  "name": "nafas",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Clean-air hours for Tashkent families, schools and mahallas",
+  "type": "module",
+  "license": "MIT",
+  "scripts": {
+    "start": "python -m http.server 5173",
+    "post": "node bot/daily.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
