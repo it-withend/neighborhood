@@ -7,14 +7,20 @@ Tashkent's winter smog follows a daily rhythm: it peaks in the morning, right wh
 
 **Live:** https://it-withend.github.io/neighborhood/
 
+![Nafas on phones in Russian and Uzbek](screenshots/gallery/05-phones-uz-ru.png)
+
 ## What it does
 
 - **One clear answer for right now**, for three groups: kids & school, people with asthma / elderly / pregnant, everyone & sport. It always says *why* (air, cold, heat, rain, wind).
+- **The walk to school, tomorrow morning**: the forecast for 07:00–09:00 with a plain tip. Parents can plan the evening before.
 - **Next 24 hours**, hour by hour, with today's best window and school hours marked.
 - **What to do now**: windows open or closed, PE inside or outside, mask, inhaler, don't burn leaves.
 - **Smog clock**: the average air for each hour of the day over the last 7 days. It shows when the city is dirtiest, for example: "the air at 08:00 was 3.4× dirtier than at 16:00".
 - **One tap to Telegram**: send today's plan to a class or family chat, or send a smog alert to neighbours asking them not to burn leaves or trash.
 - **Daily 07:00 post** to a Telegram channel through a free GitHub Actions cron job. No server needed.
+- **"Smoke nearby?" neighbour reports**: pick what you see (burning leaves, trash, coal smoke, dust…) and your district (all 12 Tashkent districts), then send it to the Nafas bot in one tap. A GitHub Actions job collects the reports every 15 minutes, and the site shows which districts reported smoke in the last 24 hours. Neighbours fill the gap the model can't see. Reports are anonymous: only the type, district and time are stored.
+- **Printable A4 poster** for a school entrance or staff room: today's answer for each group, the walk to school, the smog clock and a QR code to the live site, for people without smartphones.
+- **Installable and offline-ready (PWA)**: add it to the home screen, and if the connection drops it shows the last saved forecast with its time.
 - **Uzbek, Russian, English.** Works on any phone browser with no install, account or tracking. Every answer uses a shape, a word and a colour, so it never relies on colour alone, and it supports keyboard and screen readers.
 
 ## How it decides
@@ -46,21 +52,30 @@ node bot/daily.mjs
 ## Deploy
 
 - **Website:** `.github/workflows/pages.yml` deploys to GitHub Pages on every push to `main`. Enable it once under *Settings → Pages → Source: GitHub Actions*.
-- **Telegram post:** create a bot with @BotFather and add it as an admin of your channel. Then add the repository secrets `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` (e.g. `@your_channel`). `.github/workflows/daily-post.yml` runs every day at 07:00 Tashkent time. You can also run it by hand from the Actions tab.
+- **Telegram:** create a bot with @BotFather and add it as an admin of your channel. Then add the repository secrets `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` (e.g. `@your_channel`), and put the bot username and channel link into `config.js`.
+  - `.github/workflows/daily-post.yml` posts every day at 07:00 Tashkent time.
+  - `.github/workflows/collect-reports.yml` collects smoke reports every 15 minutes and commits `reports.json`.
+  - You can run both by hand from the Actions tab.
 
 ## Project structure
 
 ```
 index.html, style.css   UI
-app.js                  UI logic (rendering, sharing, settings)
-core.js                 data loading + decision logic, shared by the site and the bot
+app.js                  UI logic (rendering, sharing, reports, settings)
+core.js                 data loading + decision logic, shared by the site, the poster and the bots
+charts.js               smog-clock chart (site + poster)
 i18n.js                 Uzbek / Russian / English strings
+config.js               bot username, channel link, reports URL
+poster.html/.js/.css    printable A4 poster with QR code
+sw.js, manifest.webmanifest   offline app shell, install as an app
+reports.json            anonymous neighbour smoke reports (written by the collector)
 bot/daily.mjs           daily Telegram post
+bot/collect.mjs         collects smoke reports from the bot
 ```
 
 ## Built with
 
-HTML, CSS, vanilla JavaScript (ES modules) · Node.js for the bot · [Open-Meteo](https://open-meteo.com/) Air Quality (Copernicus CAMS), Weather and Geocoding APIs · GitHub Pages and GitHub Actions · Telegram Bot API · fonts Unbounded and Onest (Google Fonts).
+HTML, CSS, vanilla JavaScript (ES modules), PWA (service worker + manifest) · Node.js for the bots · qrcode-generator (MIT) for the poster QR · [Open-Meteo](https://open-meteo.com/) Air Quality (Copernicus CAMS), Weather and Geocoding APIs · GitHub Pages and GitHub Actions · Telegram Bot API · fonts Unbounded and Onest (Google Fonts).
 
 ## AI disclosure
 

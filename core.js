@@ -55,6 +55,7 @@ export function classify(h, persona) {
   if (h.aqi != null) {
     if (h.aqi > p.stay) add(2, "rAirStay", { aqi: h.aqi });
     else if (h.aqi > p.caution) add(1, "rAirCaution", { aqi: h.aqi });
+    else if (h.aqi > 50) add(0, "rAirModerate", { aqi: h.aqi });
   }
   if (h.feels != null) {
     const t = Math.round(h.feels);
@@ -80,7 +81,9 @@ export function classify(h, persona) {
 // What to do right now, as i18n keys.
 export function advice(level, persona, aqi) {
   const keys = [];
-  keys.push(["aVentOpen", "aVentShort", "aWindowsClosed"][level]);
+  // Airing depends on the outdoor air itself, not on the group's verdict.
+  const band = aqiBand(aqi) ?? 0;
+  keys.push(band === 0 ? "aVentOpen" : band === 1 ? "aVentShort" : "aWindowsClosed");
   if (persona === "kids") keys.push(["aKidsGo", "aKidsShort", "aKidsInside"][level]);
   else if (persona === "sensitive") keys.push(["aGo", "aSensShort", "aInside"][level]);
   else keys.push(["aGo", "aShort", "aInside"][level]);
@@ -132,9 +135,9 @@ async function getJSON(url) {
 export async function loadForecast(place) {
   const q = `latitude=${place.lat}&longitude=${place.lon}&timezone=auto`;
   const [air, wx] = await Promise.all([
-    getJSON(`${AIR_API}?${q}&past_days=7&forecast_days=2&hourly=pm2_5&current=pm2_5`),
+    getJSON(`${AIR_API}?${q}&past_days=7&forecast_days=3&hourly=pm2_5&current=pm2_5`),
     getJSON(
-      `${WX_API}?${q}&forecast_days=2&wind_speed_unit=ms` +
+      `${WX_API}?${q}&forecast_days=3&wind_speed_unit=ms` +
         `&hourly=apparent_temperature,precipitation,wind_speed_10m` +
         `&current=apparent_temperature,precipitation,wind_speed_10m`
     ),
@@ -147,7 +150,7 @@ export async function loadForecast(place) {
     .map((t, i) => ({ time: t, hour: Number(t.slice(11, 13)), pm25: air.hourly.pm2_5[i] }))
     .filter((h) => h.time < nowTime);
 
-  const upcoming = wx.hourly.time
+  const future = wx.hourly.time
     .map((t, i) => {
       const pm25 = pmByTime.get(t) ?? null;
       return {
@@ -161,8 +164,8 @@ export async function loadForecast(place) {
         wind: wx.hourly.wind_speed_10m[i],
       };
     })
-    .filter((h) => h.time >= nowTime)
-    .slice(0, 24);
+    .filter((h) => h.time >= nowTime);
+  const upcoming = future.slice(0, 24);
 
   const currentPm = air.current?.pm2_5 ?? upcoming[0]?.pm25 ?? null;
   return {
@@ -176,11 +179,70 @@ export async function loadForecast(place) {
       wind: wx.current.wind_speed_10m,
     },
     upcoming,
+    future,
     clock: smogClock(past),
   };
 }
 
 export const hh = (h) => String(h).padStart(2, "0") + ":00";
+
+// ---------- Neighbour smoke reports ----------
+// A report travels as a Telegram deep link: t.me/<bot>?start=smoke_<type>_<district>
+// (payload must be ≤ 64 chars of [A-Za-z0-9_-]); bot/collect.mjs stores it in reports.json.
+
+export const REPORT_TYPES = ["leaves", "trash", "stove", "dust", "traffic", "other"];
+
+export const DISTRICTS = {
+  bektemir: { uz: "Bektemir", ru: "Бектемир", en: "Bektemir" },
+  chilonzor: { uz: "Chilonzor", ru: "Чиланзар", en: "Chilanzar" },
+  mirobod: { uz: "Mirobod", ru: "Мирабад", en: "Mirabad" },
+  mirzoulugbek: { uz: "Mirzo Ulugʻbek", ru: "Мирзо-Улугбек", en: "Mirzo Ulugbek" },
+  olmazor: { uz: "Olmazor", ru: "Алмазар", en: "Almazar" },
+  sergeli: { uz: "Sergeli", ru: "Сергели", en: "Sergeli" },
+  shayxontohur: { uz: "Shayxontohur", ru: "Шайхантахур", en: "Shaykhantakhur" },
+  uchtepa: { uz: "Uchtepa", ru: "Учтепа", en: "Uchtepa" },
+  yakkasaroy: { uz: "Yakkasaroy", ru: "Яккасарай", en: "Yakkasaray" },
+  yangihayot: { uz: "Yangihayot", ru: "Янгихаят", en: "Yangihayot" },
+  yashnobod: { uz: "Yashnobod", ru: "Яшнабад", en: "Yashnabad" },
+  yunusobod: { uz: "Yunusobod", ru: "Юнусабад", en: "Yunusabad" },
+};
+
+export const reportPayload = (type, district) => `smoke_${type}_${district}`;
+
+export function parseReportPayload(payload) {
+  const m = /^smoke_([a-z]+)_([a-z]+)$/.exec(payload || "");
+  if (!m || !REPORT_TYPES.includes(m[1]) || !DISTRICTS[m[2]]) return null;
+  return { type: m[1], district: m[2] };
+}
+
+// Reports from the last `hours`, grouped by district, busiest first.
+export function summarizeReports(reports, now = Date.now(), hours = 24) {
+  const since = now - hours * 3600 * 1000;
+  const byDistrict = new Map();
+  for (const r of reports) {
+    if (Date.parse(r.t) < since) continue;
+    const d = byDistrict.get(r.district) ?? { district: r.district, count: 0, types: {} };
+    d.count += 1;
+    d.types[r.type] = (d.types[r.type] ?? 0) + 1;
+    byDistrict.set(r.district, d);
+  }
+  return [...byDistrict.values()].sort((a, b) => b.count - a.count);
+}
+
+// The next walk to school: the hour before lessons start and the first lesson hour.
+// Today if it hasn't finished yet, otherwise tomorrow.
+export function nextWalk(data, schoolStart = 8) {
+  const from = Math.max(0, schoolStart - 1);
+  const to = schoolStart + 1;
+  for (const date of [...new Set(data.future.map((h) => h.date))]) {
+    const hours = data.future.filter((h) => h.date === date && h.hour >= from && h.hour < to);
+    if (hours.length === to - from) {
+      const worst = hours.reduce((a, b) => ((b.aqi ?? -1) > (a.aqi ?? -1) ? b : a));
+      return { date, from, to, hours, worst, isToday: date === data.today };
+    }
+  }
+  return null;
+}
 
 // Plain-text summary for Telegram chats and the daily channel post.
 export function digest(t, data, placeName, url) {
@@ -196,6 +258,12 @@ export function digest(t, data, placeName, url) {
     const w = bestWindow(today, persona);
     const when = w ? `${hh(w.start)}–${hh(w.end)}` : t("digestNoWindow");
     lines.push(`${["🟢", "🟡", "🔴"][v.level]} ${t("p_" + persona)}: ${t("verdict" + v.level)}. ${t("digestBest")} ${when}`);
+  }
+  const walk = nextWalk(data);
+  if (walk?.isToday) {
+    const v = classify(walk.worst, "kids");
+    const range = `${hh(walk.from)}–${hh(walk.to)}`;
+    lines.push("", `${["🟢", "🟡", "🔴"][v.level]} ${t("digestWalk", { range, aqi: walk.worst.aqi ?? "—" })}`);
   }
   if (url) lines.push("", url);
   return lines.join("\n");

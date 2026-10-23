@@ -7,6 +7,8 @@
   <meta name="description" content="When is the air clean enough to go outside? Hour-by-hour plan for kids, people with asthma and everyone, plus one-tap alerts for mahalla and class Telegram chats.">
   <meta name="theme-color" content="#1D44A8">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&family=Unbounded:wght@500;600;700&display=swap" rel="stylesheet">
@@ -71,6 +73,16 @@
       <p id="status" class="status" role="status" aria-live="polite"></p>
     </section>
 
+    <section id="walk" class="walk" aria-labelledby="walk-title" hidden>
+      <span class="walk-mark" id="walk-mark" aria-hidden="true"></span>
+      <div class="walk-body">
+        <h2 id="walk-title"></h2>
+        <p class="walk-line" id="walk-line"></p>
+        <p class="walk-tip" id="walk-tip"></p>
+      </div>
+      <svg class="walk-art" viewBox="0 0 120 60" aria-hidden="true"><path d="M4 50h112M20 50V30l14-12 14 12v20M28 50V38h12v12M70 50c0-10 6-16 6-24M76 26a5 5 0 1 0 0-10 5 5 0 0 0 0 10M76 30l-8 10M76 30l8 8M76 34l-6 16M76 34l6 16"/></svg>
+    </section>
+
     <section class="block" aria-labelledby="h-next">
       <div class="block-head">
         <h2 id="h-next" data-i18n="nextTitle">Next 24 hours</h2>
@@ -118,8 +130,34 @@
           </a>
           <button type="button" id="copy" class="btn btn-line" data-i18n="copy">Copy text</button>
           <a id="tg-alert" class="btn btn-line btn-warn" target="_blank" rel="noopener" data-i18n="alertBtn">Smog alert for neighbours</a>
+          <a id="poster" class="btn btn-line" href="poster.html" data-i18n="poster">Print a poster for your school</a>
           <a id="tg-channel" class="btn-text" target="_blank" rel="noopener" hidden data-i18n="channel">Daily 07:00 post in Telegram</a>
           <p id="copied" class="copied" role="status" aria-live="polite"></p>
+        </div>
+      </div>
+    </section>
+
+    <section class="block report" aria-labelledby="h-report">
+      <div class="report-grid">
+        <form id="report-form" class="report-form">
+          <h2 id="h-report" data-i18n="reportTitle">Smoke nearby?</h2>
+          <p class="sub" data-i18n="reportSub"></p>
+          <fieldset class="chips">
+            <legend data-i18n="reportType">What do you see or smell?</legend>
+            <div id="report-types" class="chip-row"></div>
+          </fieldset>
+          <label class="select-label"><span data-i18n="reportDistrict">District</span>
+            <select id="report-district"></select>
+          </label>
+          <a id="report-send" class="btn btn-ink" target="_blank" rel="noopener">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21.5 3.5 2.8 10.7c-1 .4-1 1.8 0 2.1l4.6 1.5 1.8 5.6c.3.9 1.4 1.1 2 .4l2.6-2.7 4.7 3.5c.7.5 1.7.1 1.9-.8L23 4.9c.2-1-.7-1.8-1.5-1.4zM9.6 14.6l8.4-7.4-6.6 8.9-.4 3-1.4-4.5z"/></svg>
+            <span data-i18n="reportSend">Report via Telegram</span>
+          </a>
+        </form>
+        <div class="reports">
+          <h3 data-i18n="reportsRecent">Neighbour reports, last 24 hours</h3>
+          <ol id="reports-list" class="reports-list"></ol>
+          <p id="reports-empty" class="sub" data-i18n="reportsNone" hidden>No reports in the last 24 hours.</p>
         </div>
       </div>
     </section>
@@ -146,6 +184,7 @@
   </main>
 
   <footer class="foot">
+    <button type="button" id="install" class="btn btn-line" hidden data-i18n="install">Install Nafas on your phone</button>
     <p data-i18n="footer"></p>
   </footer>
 </body>

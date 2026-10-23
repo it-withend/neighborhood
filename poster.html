@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Nafas poster</title>
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;500;600;700&family=Unbounded:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="poster.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+  <script type="module" src="poster.js"></script>
+</head>
+<body class="poster-page">
+  <div class="toolbar">
+    <a href="./" class="btn-text">← nafas</a>
+    <button type="button" id="print" class="btn btn-accent" data-i18n="printNow">Print</button>
+  </div>
+
+  <article class="sheet" aria-live="polite">
+    <header class="sheet-head">
+      <span class="wordmark">
+        <svg viewBox="0 0 64 64" aria-hidden="true"><path d="M8 26c8-8 16 8 24 0s16 8 24 0M8 40c8-8 16 8 24 0s16 8 24 0"/></svg>
+        <span>nafas</span>
+      </span>
+      <span id="p-place" class="sheet-place"></span>
+    </header>
+
+    <h1 id="p-title" class="sheet-title"></h1>
+    <p id="p-now" class="sheet-now"></p>
+
+    <ol id="p-groups" class="sheet-groups"></ol>
+
+    <section id="p-walk" class="sheet-walk"></section>
+
+    <section class="sheet-clock">
+      <h2 id="p-clock-title"></h2>
+      <div id="p-clock" class="clock"></div>
+      <p id="p-clock-insight" class="insight"></p>
+    </section>
+
+    <footer class="sheet-foot">
+      <div id="p-qr" class="qr"></div>
+      <div>
+        <p id="p-scan" class="scan"></p>
+        <p id="p-url" class="url"></p>
+        <p id="p-printed" class="printed"></p>
+      </div>
+    </footer>
+  </article>
+</body>
+</html>

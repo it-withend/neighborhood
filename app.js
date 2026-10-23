@@ -1,9 +1,12 @@
-import { TASHKENT, aqiBand, pmToAqi, classify, advice, bestWindow, loadForecast, digest, hh } from "./core.js";
+import {
+  TASHKENT, aqiBand, classify, advice, bestWindow, loadForecast, digest, hh, nextWalk,
+  REPORT_TYPES, DISTRICTS, reportPayload, summarizeReports,
+} from "./core.js";
 import { LANGS, makeT } from "./i18n.js";
+import { BOT_USERNAME, TELEGRAM_CHANNEL, REPORTS_URL } from "./config.js";
+import { clockSvg } from "./charts.js";
 
 const GEO_API = "https://geocoding-api.open-meteo.com/v1/search";
-// Public Telegram channel with the daily 07:00 post (see bot/daily.mjs). Leave empty to hide the link.
-const TELEGRAM_CHANNEL = "";
 const SITE_URL = location.origin + location.pathname;
 const CITY_NAMES = { uz: "Toshkent", ru: "Ташкент", en: "Tashkent" };
 
@@ -27,7 +30,11 @@ const store = {
   },
 };
 
+// Links can preselect things, e.g. ?lang=uz&who=sensitive or ?lat=..&lon=..&name=..
+const params = new URLSearchParams(location.search);
+
 function detectLang() {
+  if (LANGS.includes(params.get("lang"))) return params.get("lang");
   const saved = store.get("lang", null);
   if (LANGS.includes(saved)) return saved;
   const nav = (navigator.language || "en").slice(0, 2);
@@ -36,8 +43,13 @@ function detectLang() {
 
 const state = {
   lang: detectLang(),
-  persona: store.get("persona", "kids"),
-  place: store.get("place", { ...TASHKENT, isDefault: true }),
+  persona: ["kids", "sensitive", "everyone"].includes(params.get("who")) ? params.get("who") : store.get("persona", "kids"),
+  place: params.has("lat")
+    ? { name: params.get("name") || "", lat: Number(params.get("lat")), lon: Number(params.get("lon")) }
+    : store.get("place", { ...TASHKENT, isDefault: true }),
+  reports: [],
+  reportType: "leaves",
+  reportDistrict: store.get("district", "chilonzor"),
   school: { start: 8, end: 14, ...store.get("school", {}) },
   data: null,
 };
@@ -127,7 +139,7 @@ function renderHours() {
       li.setAttribute("aria-label", t("hourAria", { h: hh(h.hour), aqi: h.aqi ?? "—", verdict: t("verdict" + v.level) }));
       li.title = v.reasons.map((r) => t(r.key, r.vars)).join(" ");
 
-      const pct = Math.max(7, Math.min(100, ((h.aqi ?? 0) / 200) * 100));
+      const pct = Math.max(7, Math.min(86, ((h.aqi ?? 0) / 250) * 100));
       li.innerHTML = `<div class="col" aria-hidden="true"><span class="val"></span><div class="bar-v"></div></div><span class="sch" aria-hidden="true"></span><span class="t" aria-hidden="true"></span>`;
       li.querySelector(".bar-v").style.height = pct + "%";
       const val = li.querySelector(".val");
@@ -156,62 +168,22 @@ function renderAdvice(v) {
 }
 
 function renderClock() {
-  const clock = state.data.clock;
-  const pts = clock.filter((p) => p.aqi != null);
-  if (pts.length < 12) {
-    $("clock").replaceChildren();
-    $("clock-insight").textContent = "";
-    $("clock-school").textContent = "";
-    return;
-  }
+  const c = clockSvg(state.data, { t, schoolStart: state.school.start });
+  $("clock").innerHTML = c ? c.svg : "";
+  $("clock-insight").textContent = c?.insight ?? "";
+  $("clock-school").textContent = c?.school ?? "";
+}
 
-  const W = 480, H = 210, L = 34, R = 12, T = 16, B = 28;
-  const yMax = Math.max(150, Math.ceil(Math.max(...pts.map((p) => p.aqi)) / 50) * 50);
-  const x = (hour) => L + (hour / 23) * (W - L - R);
-  const y = (aqi) => T + (1 - aqi / yMax) * (H - T - B);
-
-  const linePts = pts.map((p) => `${x(p.hour).toFixed(1)},${y(p.aqi).toFixed(1)}`);
-  const area = `M${x(pts[0].hour)},${y(0)} L${linePts.join(" L")} L${x(pts.at(-1).hour)},${y(0)} Z`;
-
-  const grid = [];
-  for (let v = 50; v <= yMax; v += 50) {
-    grid.push(`<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}"/><text x="${L - 6}" y="${y(v) + 4}" text-anchor="end">${v}</text>`);
-  }
-  const axis = [0, 6, 12, 18, 23]
-    .map((h) => `<text x="${x(h)}" y="${H - 8}" text-anchor="middle">${hh(h).slice(0, 2)}</text>`)
-    .join("");
-
-  // walk to school: the hour before lessons start and the first lesson hour
-  const ws = Math.max(0, state.school.start - 1);
-  const we = Math.min(23, state.school.start + 1);
-  const schoolBand = `<rect class="school-band" x="${x(ws)}" y="${T}" width="${x(we) - x(ws)}" height="${H - T - B}"/>` +
-    `<text class="school-band-label" x="${(x(ws) + x(we)) / 2}" y="${T - 4}" text-anchor="middle">${hh(ws)}–${hh(we)}</text>`;
-
-  const nowHour = Number(state.data.nowTime.slice(11, 13));
-  const now = `<g class="now"><line x1="${x(nowHour)}" x2="${x(nowHour)}" y1="${T}" y2="${H - B}"/>` +
-    `<text x="${x(nowHour) + 4}" y="${H - B - 6}">${t("clockNow")}</text></g>`;
-
-  const day = pts.filter((p) => p.hour >= 6 && p.hour <= 21);
-  const worst = day.reduce((a, b) => (b.pm25 > a.pm25 ? b : a));
-  const best = day.reduce((a, b) => (b.pm25 < a.pm25 ? b : a));
-  const dots = `<circle class="dot-worst" cx="${x(worst.hour)}" cy="${y(worst.aqi)}" r="5"/><circle class="dot-best" cx="${x(best.hour)}" cy="${y(best.aqi)}" r="5"/>`;
-
-  $("clock").innerHTML =
-    `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${t("clockSub")}">` +
-    `<g class="grid">${grid.join("")}</g>${schoolBand}` +
-    `<path class="area" d="${area}"/><polyline class="line" points="${linePts.join(" ")}"/>` +
-    `${now}${dots}<g class="axis">${axis}</g></svg>`;
-
-  const ratio = best.pm25 > 0 ? worst.pm25 / best.pm25 : null;
-  $("clock-insight").textContent =
-    ratio && ratio >= 1.3 ? t("clockInsight", { worst: hh(worst.hour), best: hh(best.hour), x: ratio.toFixed(1) }) : "";
-
-  const walk = clock.filter((p) => p.hour >= ws && p.hour < we && p.pm25 != null);
-  const walkPm = walk.reduce((s, p) => s + p.pm25, 0) / (walk.length || 1);
-  const walkAqi = pmToAqi(walkPm);
-  $("clock-school").textContent = walk.length
-    ? t("clockSchool", { range: `${hh(ws)}–${hh(we)}`, aqi: walkAqi, band: t("band" + aqiBand(walkAqi)).toLowerCase() })
-    : "";
+function renderWalk() {
+  const walk = nextWalk(state.data, state.school.start);
+  $("walk").hidden = !walk;
+  if (!walk) return;
+  const v = classify(walk.worst, state.persona);
+  $("walk").className = "walk lv" + v.level;
+  $("walk-mark").innerHTML = MARKS[v.level];
+  $("walk-title").textContent = t(walk.isToday ? "walkToday" : "walkTomorrow");
+  $("walk-line").textContent = t("walkLine", { range: `${hh(walk.from)}–${hh(walk.to)}`, aqi: walk.worst.aqi ?? "—" });
+  $("walk-tip").textContent = t("walkTip" + v.level);
 }
 
 function renderShare() {
@@ -225,13 +197,97 @@ function renderShare() {
   $("tg-alert").href = `https://t.me/share/url?url=${enc(SITE_URL)}&text=${enc(alert)}`;
   $("tg-channel").hidden = !TELEGRAM_CHANNEL;
   if (TELEGRAM_CHANNEL) $("tg-channel").href = TELEGRAM_CHANNEL;
+  const q = new URLSearchParams({ lang: state.lang, start: state.school.start });
+  if (!state.place.isDefault) q.set("lat", state.place.lat), q.set("lon", state.place.lon), q.set("name", state.place.name);
+  $("poster").href = "poster.html?" + q;
+}
+
+// ---------- Smoke reports ----------
+
+function renderReportForm() {
+  $("report-types").replaceChildren(
+    ...REPORT_TYPES.map((type) => {
+      const label = document.createElement("label");
+      label.innerHTML = `<input type="radio" name="rtype"><span></span>`;
+      const input = label.querySelector("input");
+      input.value = type;
+      input.checked = type === state.reportType;
+      input.addEventListener("change", () => {
+        state.reportType = type;
+        renderReportLink();
+      });
+      label.querySelector("span").textContent = t("rt_" + type);
+      return label;
+    })
+  );
+  $("report-district").replaceChildren(
+    ...Object.entries(DISTRICTS).map(([slug, names]) => {
+      const o = document.createElement("option");
+      o.value = slug;
+      o.textContent = names[state.lang];
+      o.selected = slug === state.reportDistrict;
+      return o;
+    })
+  );
+  renderReportLink();
+}
+
+function renderReportLink() {
+  const { reportType: type, reportDistrict: district } = state;
+  if (BOT_USERNAME) {
+    $("report-send").href = `https://t.me/${BOT_USERNAME}?start=${reportPayload(type, district)}`;
+  } else {
+    // No bot configured yet: share the report as a message to any chat instead.
+    const time = new Date().toTimeString().slice(0, 5);
+    const text = t("reportShare", { type: t("rt_" + type).toLowerCase(), district: DISTRICTS[district][state.lang], time, url: "" }).trim();
+    $("report-send").href = `https://t.me/share/url?url=${encodeURIComponent(SITE_URL)}&text=${encodeURIComponent(text)}`;
+  }
+}
+
+function renderReports() {
+  const groups = summarizeReports(state.reports);
+  $("reports-empty").hidden = groups.length > 0;
+  const max = Math.max(1, ...groups.map((g) => g.count));
+  $("reports-list").replaceChildren(
+    ...groups.map((g) => {
+      const li = document.createElement("li");
+      li.innerHTML = `<div class="rep-head"><b></b><span></span></div><div class="rep-bar"><i></i></div><p class="rep-types"></p>`;
+      li.querySelector("b").textContent = DISTRICTS[g.district][state.lang];
+      li.querySelector(".rep-head span").textContent = t("reportsTotal", { n: g.count });
+      li.querySelector(".rep-bar i").style.width = (g.count / max) * 100 + "%";
+      li.querySelector(".rep-types").textContent = Object.entries(g.types)
+        .sort((a, b) => b[1] - a[1])
+        .map(([type, n]) => `${t("rt_" + type)} ×${n}`)
+        .join(" · ");
+      return li;
+    })
+  );
+}
+
+async function loadReports() {
+  state.reports = [];
+  // Latest commit first; the copy deployed with the site is the fallback.
+  for (const url of [REPORTS_URL, "reports.json"]) {
+    try {
+      const res = await fetch(url, { cache: "no-store" });
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      state.reports = (await res.json()).reports || [];
+      break;
+    } catch (err) {
+      console.warn("Reports unavailable from", url, err.message);
+    }
+  }
+  renderReports();
 }
 
 function render() {
   applyStaticText();
   document.querySelectorAll('input[name="who"]').forEach((r) => (r.checked = r.value === state.persona));
+  renderReportForm();
+  renderReports();
   if (!state.data) return;
   const v = renderHero();
+  renderWalk();
   renderHours();
   renderAdvice(v);
   renderClock();
@@ -240,20 +296,30 @@ function render() {
 
 // ---------- Data ----------
 
-async function choosePlace(place) {
+async function choosePlace(place, { persist = true } = {}) {
   state.place = place;
-  store.set("place", place);
+  if (persist) store.set("place", place);
   $("results").hidden = true;
   togglePanel(false);
   applyStaticText();
   setStatus(t("loading"));
+  const cacheKey = `forecast:${place.lat},${place.lon}`;
   try {
     state.data = await loadForecast(place);
+    store.set(cacheKey, state.data);
     setStatus("");
     render();
   } catch (err) {
     console.error(err);
-    setStatus(t("errLoad"), true);
+    const cached = store.get(cacheKey, null);
+    if (cached) {
+      // Offline: show the last saved forecast and say how old it is.
+      state.data = cached;
+      render();
+      setStatus(t("offlineNote", { time: cached.nowTime.slice(11, 16) }), true);
+    } else {
+      setStatus(t("errLoad"), true);
+    }
   }
 }
 
@@ -349,5 +415,31 @@ $("copy").addEventListener("click", async () => {
   }
 });
 
+$("report-district").addEventListener("change", (e) => {
+  state.reportDistrict = e.target.value;
+  store.set("district", state.reportDistrict);
+  renderReportLink();
+});
+
+// Install as an app (Android/desktop Chrome); iOS uses "Add to Home Screen" from the share menu.
+let installPrompt = null;
+addEventListener("beforeinstallprompt", (e) => {
+  e.preventDefault();
+  installPrompt = e;
+  $("install").hidden = false;
+});
+$("install").addEventListener("click", async () => {
+  if (!installPrompt) return;
+  installPrompt.prompt();
+  await installPrompt.userChoice;
+  installPrompt = null;
+  $("install").hidden = true;
+});
+
+if ("serviceWorker" in navigator && location.protocol === "https:") {
+  navigator.serviceWorker.register("sw.js").catch((e) => console.warn("SW:", e.message));
+}
+
 render();
-choosePlace(state.place);
+choosePlace(state.place, { persist: !params.has("lat") });
+loadReports();
